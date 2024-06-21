@@ -1,0 +1,63 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Runtime.InteropServices;
+
+class Program
+{
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    static extern IntPtr FindFirstStreamW(string lpFileName, StreamInfoLevels InfoLevel, ref WIN32_FIND_STREAM_DATA lpFindStreamData, uint dwFlags);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    static extern bool FindNextStreamW(IntPtr hFindStream, ref WIN32_FIND_STREAM_DATA lpFindStreamData);
+
+    [DllImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool FindClose(IntPtr hFindStream);
+
+    enum StreamInfoLevels
+    {
+        FindStreamInfoStandard = 0
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct WIN32_FIND_STREAM_DATA
+    {
+        public long StreamSize;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 296)]
+        public string cStreamName;
+    }
+
+    static void Main(string[] args)
+    {
+        string filePath = @"C:\Users\kalip33\Downloads\File_Attributes-main\data\1183004002_7XLD.SLDPRT";
+        List<string> streams = GetAlternateDataStreams(filePath);
+
+        Console.WriteLine("Alternate Data Streams:");
+        foreach (var stream in streams)
+        {
+            Console.WriteLine(stream);
+        }
+    }
+
+    static List<string> GetAlternateDataStreams(string fileName)
+    {
+        List<string> streams = new List<string>();
+
+        WIN32_FIND_STREAM_DATA findStreamData = new WIN32_FIND_STREAM_DATA();
+        IntPtr findHandle = FindFirstStreamW(fileName, StreamInfoLevels.FindStreamInfoStandard, ref findStreamData, 0);
+
+        if (findHandle != IntPtr.Zero)
+        {
+            do
+            {
+                streams.Add(findStreamData.cStreamName);
+            }
+            while (FindNextStreamW(findHandle, ref findStreamData));
+
+            FindClose(findHandle);
+        }
+
+        return streams;
+    }
+}
