@@ -28,8 +28,15 @@ Module Module1
             ' Open the listing window
             theSession.ListingWindow.Open()
 
+            ' Create UCS for the first three points
+            Dim ucs1 As Matrix3x3 = CreateUCS(openFileDialog1.FileName, 0, 2, 3, 4)
+
+            ' Create UCS for the next three points
+            Dim ucs2 As Matrix3x3 = CreateUCS(openFileDialog1.FileName, 3, 5, 6, 7)
+
             Using sr As StreamReader = New StreamReader(openFileDialog1.FileName)
                 Try
+                    Dim count As Integer = 0
                     While Not sr.EndOfStream
                         line = sr.ReadLine()
                         Dim strings As String() = line.Split(delim, StringSplitOptions.RemoveEmptyEntries)
@@ -37,7 +44,13 @@ Module Module1
                             endPoint.X = Double.Parse(strings(2).Replace(",", "."), USculture)
                             endPoint.Y = Double.Parse(strings(3).Replace(",", "."), USculture)
                             endPoint.Z = Double.Parse(strings(4).Replace(",", "."), USculture)
-                            endPoint = Abs2WCS(endPoint)
+
+                            ' Transform point to WCS using the appropriate UCS
+                            If count < 3 Then
+                                endPoint.TransformWithMatrix3x3(ucs1)
+                            Else
+                                endPoint.TransformWithMatrix3x3(ucs2)
+                            End If
 
                             ' Display the point in the listing window
                             theSession.ListingWindow.WriteLine("Point: X=" & endPoint.X & ", Y=" & endPoint.Y & ", Z=" & endPoint.Z)
@@ -49,6 +62,7 @@ Module Module1
 
                             startPoint = endPoint
                             firstPass = False
+                            count += 1
                         End If
                     End While
                 Catch e As Exception
@@ -60,6 +74,54 @@ Module Module1
             theSession.ListingWindow.Close()
         End If
     End Sub
+
+    ' Function to create UCS from points in the CSV file
+    Function CreateUCS(ByVal fileName As String, ByVal startIndex As Integer, ByVal xIndex As Integer, ByVal yIndex As Integer, ByVal zIndex As Integer) As Matrix3x3
+        Dim ucs As Matrix3x3 = Nothing
+        Dim delim As Char() = {ControlChars.Tab}
+        Dim USculture As System.Globalization.CultureInfo = New System.Globalization.CultureInfo("en-US")
+
+        Using sr As StreamReader = New StreamReader(fileName)
+            Try
+                For i As Integer = 0 To startIndex
+                    Dim line As String = sr.ReadLine()
+                    If line Is Nothing Then
+                        Throw New Exception("Not enough points in the CSV file.")
+                    End If
+                Next
+
+                Dim x, y, z As Double
+                Dim line1 As String = sr.ReadLine()
+                Dim strings1 As String() = line1.Split(delim, StringSplitOptions.RemoveEmptyEntries)
+                If strings1.Length >= 5 Then
+                    x = Double.Parse(strings1(xIndex).Replace(",", "."), USculture)
+                    y = Double.Parse(strings1(yIndex).Replace(",", "."), USculture)
+                    z = Double.Parse(strings1(zIndex).Replace(",", "."), USculture)
+                    ucs = CreateUCSFromPoint(x, y, z)
+                End If
+            Catch e As Exception
+                MessageBox.Show(e.Message)
+            End Try
+        End Using
+
+        Return ucs
+    End Function
+
+    ' Function to create UCS from a point
+    Function CreateUCSFromPoint(ByVal x As Double, ByVal y As Double, ByVal z As Double) As Matrix3x3
+        Dim wcs As Matrix3x3 = UFSession.GetUFSession.Matrix.Create
+        Dim ucs As Matrix3x3 = UFSession.GetUFSession.Matrix.Create
+
+        Dim origin(2) As Double
+        origin(0) = x
+        origin(1) = y
+        origin(2) = z
+
+        ufs.Csys.CreateMatrix(0, origin, wcs)
+        ufs.Csys.CreateMatrix(1, origin, ucs)
+
+        Return ucs
+    End Function
 
     ' Function to map point from absolute coordinates to WCS
     Function Abs2WCS(ByVal inPt As Point3d) As Point3d
