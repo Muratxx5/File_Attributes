@@ -11,7 +11,7 @@ Module Module1
     Sub Main()
         Dim openFileDialog1 As New OpenFileDialog()
 
-        openFileDialog1.Filter = "txt files (*.txt)|*.txt|All files (*.*)|*.*"
+        openFileDialog1.Filter = "csv files (*.csv)|*.csv|All files (*.*)|*.*"
         openFileDialog1.FilterIndex = 1
         openFileDialog1.RestoreDirectory = True
 
@@ -22,7 +22,7 @@ Module Module1
             Dim startPoint As New Point3d(0, 0, 0)
             Dim endPoint As Point3d
             Dim firstPass As Boolean = True
-            Dim delim As Char() = {" "c}
+            Dim delim As Char() = {ControlChars.Tab}
             Dim USculture As System.Globalization.CultureInfo = New System.Globalization.CultureInfo("en-US")
 
             ' Open the listing window
