@@ -25,6 +25,9 @@ Module Module1
             Dim delim As Char() = {" "c}
             Dim USculture As System.Globalization.CultureInfo = New System.Globalization.CultureInfo("en-US")
 
+            ' Open the listing window
+            theSession.ListingWindow.Open()
+
             Using sr As StreamReader = New StreamReader(openFileDialog1.FileName)
                 Try
                     line = sr.ReadLine()
@@ -35,6 +38,9 @@ Module Module1
                             endPoint.Y = Double.Parse(strings(3), USculture)
                             endPoint.Z = Double.Parse(strings(4), USculture)
                             endPoint = Abs2WCS(endPoint)
+
+                            ' Display the point in the listing window
+                            theSession.ListingWindow.WriteLine("Point: X=" & endPoint.X & ", Y=" & endPoint.Y & ", Z=" & endPoint.Z)
 
                             If firstPass Then
                                 firstPass = False
@@ -51,6 +57,9 @@ Module Module1
                     MessageBox.Show(e.Message)
                 End Try
             End Using
+
+            ' Close the listing window
+            theSession.ListingWindow.Close()
         End If
     End Sub
 
