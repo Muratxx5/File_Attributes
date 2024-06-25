@@ -19,7 +19,7 @@ Module Module1
             Dim theSession As Session = Session.GetSession()
             Dim workPart As Part = theSession.Parts.Work
             Dim line As String
-            Dim startPoint As Point3d = Nothing
+            Dim startPoint As New Point3d(0, 0, 0)
             Dim endPoint As Point3d
             Dim firstPass As Boolean = True
             Dim delim As Char() = {" "c}
@@ -30,28 +30,26 @@ Module Module1
 
             Using sr As StreamReader = New StreamReader(openFileDialog1.FileName)
                 Try
-                    line = sr.ReadLine()
-                    While Not line Is Nothing
+                    While Not sr.EndOfStream
+                        line = sr.ReadLine()
                         Dim strings As String() = line.Split(delim, StringSplitOptions.RemoveEmptyEntries)
-                        If strings.Length >= 5 Then
-                            endPoint.X = Double.Parse(strings(2), USculture)
-                            endPoint.Y = Double.Parse(strings(3), USculture)
-                            endPoint.Z = Double.Parse(strings(4), USculture)
+                        If strings.Length >= 3 Then
+                            endPoint.X = Double.Parse(strings(0), USculture)
+                            endPoint.Y = Double.Parse(strings(1), USculture)
+                            endPoint.Z = Double.Parse(strings(2), USculture)
                             endPoint = Abs2WCS(endPoint)
 
                             ' Display the point in the listing window
                             theSession.ListingWindow.WriteLine("Point: X=" & endPoint.X & ", Y=" & endPoint.Y & ", Z=" & endPoint.Z)
 
-                            If firstPass Then
-                                firstPass = False
-                            Else
+                            If Not firstPass Then
                                 ' Create a line from startPoint to endPoint
                                 workPart.Curves.CreateLine(startPoint, endPoint)
                             End If
 
                             startPoint = endPoint
+                            firstPass = False
                         End If
-                        line = sr.ReadLine()
                     End While
                 Catch e As Exception
                     MessageBox.Show(e.Message)
