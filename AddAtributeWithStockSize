@@ -41,8 +41,9 @@ Module NXJournal
     Dim theUI As UI = UI.GetUI()
     Dim Length As Double
     Dim Width As Double
-    Dim winFormLocationX As Integer = 317 ' Default X position for GUI
-    Dim winFormLocationY As Integer = 317 ' Default Y position for GUI
+   ' Dim winFormLocationX As Integer = 1220 ' Default X position for GUI
+     Dim winFormLocationX As Integer = 300 ' Default X position for GUI
+    Dim winFormLocationY As Integer = 200 ' Default Y position for GUI
     Dim modifications As Boolean
     Dim ufs As UFSession = UFSession.GetUFSession() 
     
@@ -286,16 +287,7 @@ Sub Main(ByVal args() As String)
                 End Select
             Next attribute
             
-              lw.Open()
-              lw.WriteLine(" StocksizeX: " & stocksizex)
-              lw.WriteLine(" StockSizeY: " & StockSizeY)
-              lw.WriteLine(" StockSizeZ: " & StockSizeZ)
-              lw.WriteLine(" STOCKSIZE: " & STOCKSIZE)
-              lw.WriteLine(" sertlik: " & sertlik)
-              lw.WriteLine(" Description: " & Description)
-              lw.WriteLine(" ZZmazleme: " & zzmalzeme)
-              lw.WriteLine(" Mazleme: " & malzeme)
-              lw.close
+
 
             ' Display the results in the listing window
             'Guide.InfoWriteLine("DESCRIPTION = " & description)
@@ -312,11 +304,17 @@ Sub Main(ByVal args() As String)
             myDialog.TextBox5.Text = malzeme    ' Set STOCKSIZE to TextBox3
             'myDialog.ShowDialog()
                     If myDialog.ShowDialog() = DialogResult.OK Then
-        DeleteBoundingBox(bboxFeature)
-        End If
+                    DeleteBoundingBox(bboxFeature)
+                    
+                                ' Display the results in the listing window
+
+                  
+
+               
+                    End If
             '-----------------        
         End If
-
+        lw.close()
      Loop   
  End Sub
  
@@ -528,6 +526,13 @@ Public Class Dialog1
         Else
            ' MsgBox("Listeden bir öğe seçiniz.")
         End If
+        
+      
+                  'lw.WriteLine(" STOCKSIZE: " & TextBox3.Text)
+                 ' lw.WriteLine(" sertlik: " & TextBox2.Text)
+                 ' lw.WriteLine(" ZZmazleme: " & TextBox4.Text)
+                 ' lw.WriteLine(" Mazleme: " & TextBox5.Text)
+                 ' lw.WriteLine("------------------------------------ ")
 
         Me.Close()
     End Sub
@@ -541,6 +546,13 @@ Public Class Dialog1
         ' CSV dosyasının yüklenmesi
         Dim filePath As String = "D:\NxMacro\Data\SARF_KODLAR.csv" ' Dosya yolu
         LoadCSVDataToListBox(filePath, ListBox1)
+        
+            Me.StartPosition = FormStartPosition.Manual
+			Me.Location = New System.Drawing.Point(winFormLocationX, winFormLocationY)
+
+		'	Me.BackColor = Color.FromArgb(90, 90, 90)
+
+		'	OK_Button.BackColor = Color.FromArgb(20, 20, 20)
     End Sub
     
 
