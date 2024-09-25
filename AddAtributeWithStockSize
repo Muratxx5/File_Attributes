@@ -1,0 +1,780 @@
+Option Strict Off
+Imports System
+Imports System.Collections.Generic
+Imports NXOpen
+Imports NXOpen.UF
+Imports NXOpenUI
+Imports System.Windows.Forms
+Imports System.Drawing
+Imports System.Globalization
+Imports System.IO
+
+Module NXJournal
+
+    Dim theSession As Session = Session.GetSession()
+    Public workPart As Part = theSession.Parts.Work
+    Public csvDataList As New List(Of String)
+    Dim displayPart As NXOpen.Part = theSession.Parts.Display
+            
+   Dim selectedBody As Body = Nothing ' Initialize the body variable
+     Dim lw As ListingWindow = theSession.ListingWindow
+     
+    Dim theUFSession As UFSession = UFSession.GetUFSession()
+
+  
+    Dim unitString As String
+    Dim formattedWidth As Double
+    Dim formattedDepth As Double
+    Dim formattedHeight As Double
+    Dim theUI As UI = UI.GetUI()
+    Dim Length As Double
+    Dim Width As Double
+    Dim winFormLocationX As Integer = 317 ' Default X position for GUI
+    Dim winFormLocationY As Integer = 317 ' Default Y position for GUI
+    Dim modifications As Boolean
+    Dim ufs As UFSession = UFSession.GetUFSession() 
+    
+    ' Configuration settings
+     Dim decimalFormat As String = "F1"
+    Dim roundToNearestHalfBLN As Boolean = True
+    Dim modificationsQST As String = "Maybe"
+    Dim materialthicknessadjust As Boolean = True
+    Dim trimzeros As Boolean = True
+   ' Dim LengthAttribute As String = "DIM_LENGTH"
+   ' Dim WidthAttribute As String = "DIM_WIDTH"
+   'Dim MaterialThicknessAttribute As String = "MAT_THICKNESS"
+
+    ' Use a Dictionary to track processed components
+    Private ProcessedComponents As New Dictionary(Of String, Boolean)
+     
+Sub Main(ByVal args() As String)
+    Do
+                lw.Open()
+                Dim displayPart As NXOpen.Part = theSession.Parts.Display
+        'Dim selectedBody As Body = Nothing ' Initialize the body variable
+        If SelectBody("Select a body", selectedBody) = Selection.Response.Cancel Then
+            Return
+        End If
+        
+        '----StocksizeYeni
+
+        Dim bodyToProcess As Body = selectedBody
+        
+        Dim nullNXOpen_Features_ToolingBox As NXOpen.Features.ToolingBox = Nothing
+                Dim toolingBoxBuilder1 As NXOpen.Features.ToolingBoxBuilder = workPart.Features.ToolingFeatureCollection.CreateToolingBoxBuilder(nullNXOpen_Features_ToolingBox)
+        
+                ' Calculate and display the center of mass
+                Dim accValue(10) As Double
+                accValue(0) = 0.999
+                Dim massProps(46) As Double
+                Dim stats(12) As Double
+                theUFSession.Modl.AskMassProps3d(New Tag() {bodyToProcess.Tag}, 1, 1, 4, 0.03, 1, accValue, massProps, stats)
+        
+                ' Convert the center of mass coordinates to Double
+                Dim com_x As Double = massProps(3)
+                Dim com_y As Double = massProps(4)
+                Dim com_z As Double = massProps(5)
+        
+                toolingBoxBuilder1.Type = NXOpen.Features.ToolingBoxBuilder.Types.BoundedBlock
+                toolingBoxBuilder1.ReferenceCsysType = NXOpen.Features.ToolingBoxBuilder.RefCsysType.SelectedCsys
+                toolingBoxBuilder1.XValue.SetFormula("10")
+                toolingBoxBuilder1.YValue.SetFormula("10")
+                toolingBoxBuilder1.ZValue.SetFormula("10")
+                toolingBoxBuilder1.OffsetPositiveX.SetFormula("0")
+                toolingBoxBuilder1.OffsetNegativeX.SetFormula("0")
+                toolingBoxBuilder1.OffsetPositiveY.SetFormula("0")
+                toolingBoxBuilder1.OffsetNegativeY.SetFormula("0")
+                toolingBoxBuilder1.OffsetPositiveZ.SetFormula("0")
+                toolingBoxBuilder1.OffsetNegativeZ.SetFormula("0")
+                toolingBoxBuilder1.RadialOffset.SetFormula("0")
+                toolingBoxBuilder1.Clearance.SetFormula("0")
+                toolingBoxBuilder1.CsysAssociative = True
+                toolingBoxBuilder1.NonAlignedMinimumBox = True
+                toolingBoxBuilder1.SingleOffset = False
+        
+                ' Tooling box creation
+                Dim selectionIntentRuleOptions1 As NXOpen.SelectionIntentRuleOptions = workPart.ScRuleFactory.CreateRuleOptions()
+                selectionIntentRuleOptions1.SetSelectedFromInactive(False)
+        
+
+        
+                ' Use the selectedBody for creating the dumb rule
+                Dim bodyDumbRule1 As NXOpen.BodyDumbRule = workPart.ScRuleFactory.CreateRuleBodyDumb(New Body() {selectedBody}, True, selectionIntentRuleOptions1)
+                selectionIntentRuleOptions1.Dispose()
+        
+                Dim scCollector1 As NXOpen.ScCollector = toolingBoxBuilder1.BoundedObject
+                Dim rules1(0) As NXOpen.SelectionIntentRule
+                rules1(0) = bodyDumbRule1
+                scCollector1.ReplaceRules(rules1, False)
+        
+                ' Set selections
+                Dim selections1(0) As NXOpen.NXObject
+                selections1(0) = selectedBody
+                Dim deselections1(-1) As NXOpen.NXObject
+                toolingBoxBuilder1.SetSelectedOccurrences(selections1, deselections1)
+        
+                Dim selectNXObjectList1 As NXOpen.SelectNXObjectList = toolingBoxBuilder1.FacetBodies
+                Dim objects1(-1) As NXOpen.NXObject
+                Dim added1 As Boolean = selectNXObjectList1.Add(objects1)
+                toolingBoxBuilder1.CalculateBoxSize()
+        
+                ' Set the box position using the center of mass coordinates
+                Dim csysorigin1 As NXOpen.Point3d = New NXOpen.Point3d(com_x, com_y, com_z)
+                toolingBoxBuilder1.BoxPosition = csysorigin1
+               ' lw.WriteLine(com_x) 'Kontrol Amaçlıdır. 
+        
+                Dim nXObject1 As NXObject
+        
+                ' Commit the tooling box to create the feature
+                nXObject1 = toolingBoxBuilder1.Commit()
+        
+                ' Destroy the tooling box builder
+                If toolingBoxBuilder1 IsNot Nothing Then
+                    toolingBoxBuilder1.Destroy()
+                End If
+        
+                ' Access the body of the bounding box feature
+                Dim bboxFeature As Features.Feature = TryCast(nXObject1, Features.Feature)
+                Dim bboxBody As Body = Nothing
+                Dim innerBboxBody As Body = Nothing
+        
+                If bboxFeature IsNot Nothing Then
+                    For Each innerBboxBody In bboxFeature.GetBodies()
+                        Exit For
+                    Next
+                End If
+        
+                If innerBboxBody IsNot Nothing Then
+                    ' Initialize directions and distances arrays
+                    Dim minCorner(2) As Double
+                    Dim directions(,) As Double = New Double(2, 2) {}
+                    Dim distances(2) As Double
+        
+                    ' Get the bounding box of the body
+                    theUFSession.Modl.AskBoundingBoxExact(innerBboxBody.Tag, Tag.Null, minCorner, directions, distances)
+        
+                    ' Define the minimum corner point
+                    Dim cornerPoint As Point3d = New Point3d(minCorner(0), minCorner(1), minCorner(2))
+        
+                    ' Initialize a List to store unique vertices
+                    Dim vertices As New List(Of Point3d)()
+        
+                    ' Iterate through all edges in the body and get vertices
+                    For Each edge As Edge In innerBboxBody.GetEdges()
+                        Dim vertex1 As Point3d, vertex2 As Point3d
+                        edge.GetVertices(vertex1, vertex2)
+                        If Not vertices.Contains(vertex1) Then vertices.Add(vertex1)
+                        If Not vertices.Contains(vertex2) Then vertices.Add(vertex2)
+                    Next
+        
+                    ' Select the first vertex as the starting vertex
+                    Dim startingVertex As Point3d = vertices(0)
+        
+                    ' Initialize a List to store lengths of edges connected to the starting vertex
+                    Dim edgeLengths As New List(Of Double)
+                    Dim edgesAtStartingVertex As Integer = 0
+        
+                    ' Iterate through all edges in the body
+                    For Each edge As Edge In innerBboxBody.GetEdges()
+                        Dim vertex1 As Point3d, vertex2 As Point3d
+                        edge.GetVertices(vertex1, vertex2)
+                        If IsPointEqual(startingVertex, vertex1) OrElse IsPointEqual(startingVertex, vertex2) Then
+                            edgesAtStartingVertex += 1
+                            edgeLengths.Add(edge.GetLength())
+                        End If
+                    Next
+        
+                    ' Check if we have at least three edges before accessing the list
+                    If edgeLengths.Count >= 3 Then
+                        ' Sort the edge lengths
+                        edgeLengths.Sort()
+        
+                        ' Output the initial (raw) bounding box dimensions before any formatting
+                       ' lw.WriteLine("")
+                       ' lw.WriteLine("Initial Bounding Box Dimensions:")
+                       ' lw.WriteLine(" - Width:  " & edgeLengths(0).ToString())
+                       ' lw.WriteLine(" - Depth:  " & edgeLengths(1).ToString())
+                       ' lw.WriteLine(" - Height: " & edgeLengths(2).ToString())
+                       ' lw.WriteLine(" ")
+        
+                        ' Format the lengths of the three edges as width, depth, and height
+                        formattedWidth = FormatNumber(edgeLengths(0))
+                        formattedDepth = FormatNumber(edgeLengths(1))
+                        formattedHeight = FormatNumber(edgeLengths(2))
+        
+                    Else
+                        lw.WriteLine("Boundybox boyutlarını belirlemek için başlangıç köşesine bağlı en az üç kenar bulunamadı... Bir bokluk var kontrol et")
+                    End If
+        
+                    ' Output the formatted bounding box dimensions
+                  '  lw.WriteLine("")
+                   ' lw.WriteLine("Formatted Bounding Box Dimensions:")
+                   ' lw.WriteLine(" - Width:  " & formattedWidth & " " & unitString)
+                    'lw.WriteLine(" - Depth:  " & formattedDepth & " " & unitString)
+                   ' lw.WriteLine(" - Height: " & formattedHeight & " " & unitString)
+                   ' lw.WriteLine(" ")
+                Else
+                   ' lw.WriteLine("Failed to get the body of the bounding box feature.")
+                End If
+        
+        
+                  '  ShowBoundingBoxInfo(formattedWidth, formattedDepth, formattedHeight) ' Messagebox ile boyutları göster
+                    
+                    'Add Body Attribute
+        			AddBodyAttribute(selectedBody,"StockSizeX", formattedWidth.ToString("0.000"))
+                    AddBodyAttribute(selectedBody,"StockSizeY", formattedDepth.ToString("0.000"))
+                    AddBodyAttribute(selectedBody,"StockSizeZ", formattedHeight.ToString("0.000"))
+                    AddBodyAttribute(selectedBody,"STOCKSIZE", formattedWidth.ToString("0.000") &" X "& formattedDepth.ToString("0.000") &" X "& formattedHeight.ToString("0.000"))
+        	        Dim attributes As NXObject.AttributeInformation() = selectedBody.GetUserAttributes()
+                Dim existingAttributes As New Dictionary(Of String, String)
+        
+                For Each attr As NXObject.AttributeInformation In attributes
+                    existingAttributes(attr.Title) = attr.StringValue
+                Next
+                    '--
+            
+        '----StocksizeYeni
+
+        If selectedBody IsNot Nothing Then
+          '  Guide.InfoWriteLine("Outputting 'DESCRIPTION' and 'STOCKSIZE' attributes for the selected body:")
+
+            ' Retrieve user attributes for the selected body
+            'Dim attributes() As NXObject.AttributeInformation = selectedBody.GetUserAttributes()
+
+            ' Initialize variables to hold attribute values
+            Dim description As String = ""
+            Dim stockSize As String = ""
+            Dim stocksizex As String = ""
+            Dim stocksizey As String = ""
+            Dim stocksizez As String = ""
+            Dim Sertlik As String = ""
+            Dim zzmalzeme As String = ""
+            Dim malzeme As String = ""
+
+            ' Loop through attributes and get the values of 'DESCRIPTION' and 'STOCKSIZE'
+         For Each attribute As NXObject.AttributeInformation In attributes
+                'Select Case attribute.Title.ToUpper()
+                Select Case attribute.Title
+                    Case "DESCRIPTION"
+                        description = attribute.StringValue
+                    Case "STOCKSIZE"
+                        stockSize = attribute.StringValue
+                    Case "StockSizeX"
+                        stocksizex = attribute.StringValue
+                    Case "StockSizeY"
+                        stocksizey = attribute.StringValue
+                    Case "StockSizeZ"
+                        stocksizez = attribute.StringValue
+                    Case "sertlik"
+                        sertlik = attribute.StringValue
+                    Case "ZZMALZEME"
+                        zzmalzeme = attribute.StringValue
+                    Case "MALZEME"
+                        malzeme = attribute.StringValue
+                End Select
+            Next attribute
+            
+              lw.Open()
+              lw.WriteLine(" StocksizeX: " & stocksizex)
+              lw.WriteLine(" StockSizeY: " & StockSizeY)
+              lw.WriteLine(" StockSizeZ: " & StockSizeZ)
+              lw.WriteLine(" STOCKSIZE: " & STOCKSIZE)
+              lw.WriteLine(" sertlik: " & sertlik)
+              lw.WriteLine(" Description: " & Description)
+              lw.WriteLine(" ZZmazleme: " & zzmalzeme)
+              lw.WriteLine(" Mazleme: " & malzeme)
+              lw.close
+
+            ' Display the results in the listing window
+            'Guide.InfoWriteLine("DESCRIPTION = " & description)
+           ' Guide.InfoWriteLine("STOCKSIZE = " & stockSize)
+        'Guide.InfoWriteLine("Sertlik = " & Sertlik)
+           '  Guide.InfoWriteLine("ZZMalzeme = " & zzmalzeme)
+
+            '-----Formu Göster
+            Dim myDialog As New Dialog1
+            myDialog.myPart = workPart.FullPath
+            myDialog.TextBox2.Text = sertlik ' Set sertlik to TextBox2
+            myDialog.TextBox3.Text = stockSize    ' Set STOCKSIZE to TextBox3
+            myDialog.TextBox4.Text = zzmalzeme    ' Set STOCKSIZE to TextBox3
+            myDialog.TextBox5.Text = malzeme    ' Set STOCKSIZE to TextBox3
+            'myDialog.ShowDialog()
+                    If myDialog.ShowDialog() = DialogResult.OK Then
+        DeleteBoundingBox(bboxFeature)
+        End If
+            '-----------------        
+        End If
+
+     Loop   
+ End Sub
+ 
+Private Sub DeleteBoundingBox(bboxFeature)
+        Try
+            ' Check if bboxFeature is defined
+            If bboxFeature IsNot Nothing Then
+                ' Delete the bounding box feature using UpdateManager
+                Dim featureTags(0) As NXOpen.Tag
+                featureTags(0) = bboxFeature.Tag
+                theUFSession.Modl.DeleteFeature(featureTags)
+
+                ' Provide feedback to the user
+               ' MsgBox("Bounding box feature deleted successfully.")
+            Else
+                'MsgBox("No bounding box feature found to delete.")
+            End If
+        Catch ex As Exception
+            MsgBox("An error occurred while deleting the bounding box: " & ex.Message)
+        End Try
+        
+        
+End Sub  
+    
+Sub AddBodyAttribute(ByVal selectedBody As Body, ByVal attTitle As String, ByVal attValue As String)
+
+        Dim markId4 As Session.UndoMarkId
+        markId4 = theSession.SetUndoMark(Session.MarkVisibility.Invisible, "add body attribute")
+
+        Dim attributePropertiesBuilder1 As AttributePropertiesBuilder
+        attributePropertiesBuilder1 = theSession.AttributeManager.CreateAttributePropertiesBuilder(theSession.Parts.Work, {selectedBody}, AttributePropertiesBuilder.OperationType.None)
+
+        attributePropertiesBuilder1.IsArray = False
+        attributePropertiesBuilder1.DataType = AttributePropertiesBaseBuilder.DataTypeOptions.String
+
+        attributePropertiesBuilder1.Title = attTitle
+        attributePropertiesBuilder1.StringValue = attValue
+
+        Dim nXObject1 As NXObject
+        nXObject1 = attributePropertiesBuilder1.Commit()
+
+        Dim id1 As Session.UndoMarkId
+        id1 = theSession.GetNewestUndoMark(Session.MarkVisibility.Visible)
+
+        Dim nErrs1 As Integer
+        nErrs1 = theSession.UpdateManager.DoUpdate(id1)
+
+        attributePropertiesBuilder1.Destroy()
+End Sub
+    
+        ' Function to compare two Point3d objects
+Private Function IsPointEqual(ByVal p1 As Point3d, ByVal p2 As Point3d) As Boolean
+        Const TOLERANCE As Double = 0.0001
+        Return Math.Abs(p1.X - p2.X) < TOLERANCE AndAlso Math.Abs(p1.Y - p2.Y) < TOLERANCE AndAlso Math.Abs(p1.Z - p2.Z) < TOLERANCE
+End Function
+    
+Public Function GetUnloadOption(ByVal dummy As String) As Integer
+        GetUnloadOption = NXOpen.Session.LibraryUnloadOption.Immediately
+End Function
+    
+        ' Format number function with rounding and formatting applied
+Private Function FormatNumber(ByVal number As Double) As String
+        'Dim roundedNumber As Double = Math.Round(number, 1)
+        Dim roundedNumber As Double = Math.Round(number, 0) ' virgülden sonra kaç hane yuvarlansın. 0 olursa Tam sayıya yuvarla
+        'Dim formattedNumber As String = roundedNumber.ToString(decimalFormat, CultureInfo.InvariantCulture)
+        Dim formattedNumber As String = roundedNumber.ToString(decimalFormat) 'Nokta virgül meselesi
+        If trimzeros AndAlso formattedNumber.EndsWith(".0") Then
+            formattedNumber = formattedNumber.Substring(0, formattedNumber.Length - 2)
+        End If
+        Return formattedNumber
+End Function
+    
+    ' Method to select a body
+Function SelectBody(ByVal prompt As String, ByRef selObj As TaggedObject) As Selection.Response
+
+        Dim theUI As UI = UI.GetUI
+        Dim title As String = "Select a solid body"
+        Dim includeFeatures As Boolean = False
+        Dim keepHighlighted As Boolean = False
+        Dim selAction As Selection.SelectionAction = Selection.SelectionAction.ClearAndEnableSpecific
+        Dim cursor As Point3d
+        Dim scope As Selection.SelectionScope = Selection.SelectionScope.WorkPart
+        Dim selectionMask_array(0) As Selection.MaskTriple
+
+        With selectionMask_array(0)
+            .Type = UFConstants.UF_solid_type
+            .SolidBodySubtype = UFConstants.UF_UI_SEL_FEATURE_SOLID_BODY
+        End With
+
+        Dim resp As Selection.Response = theUI.SelectionManager.SelectTaggedObject(prompt, _
+         title, scope, selAction, _
+         includeFeatures, keepHighlighted, selectionMask_array, _
+         selobj, cursor)
+        If resp = Selection.Response.ObjectSelected OrElse resp = Selection.Response.ObjectSelectedByName Then
+            Return Selection.Response.Ok
+        Else
+            Return Selection.Response.Cancel
+        End If
+
+End Function
+
+
+'--------Form Dialog oluşturma
+'--------Form Dialog oluşturma
+Public Class Dialog1
+
+    ' CSV verilerini ListBox'a yükleme
+    Sub LoadCSVDataToListBox(ByVal filePath As String, ByVal listBox As ListBox)
+        Using reader As New StreamReader(filePath)
+            ' İlk satırı oku (başlık satırı)
+            Dim header As String = reader.ReadLine()
+
+            ' Satırı oku ve parçala
+            While Not reader.EndOfStream
+                Dim line As String = reader.ReadLine()
+                Dim parts As String() = line.Split(";"c) ' CSV dosyasında sütunlar ";" ile ayrılmış
+
+                ' Malzeme No ve Malzeme Tanımı'nı birleştirerek listbox'a ekle
+                Dim item As String = parts(0).Trim() & " - " & parts(1).Trim()
+                listBox.Items.Add(item)
+                csvDataList.Add(item)
+            End While
+        End Using
+    End Sub
+
+    Public myPart As String
+    Private myAttributeTitle(6) As String
+
+    Private Sub TxtAra_TextChanged(ByVal sender As Object, ByVal e As EventArgs) Handles TxtAra.TextChanged
+        ' Arama metnini alın
+        Dim searchText As String = TxtAra.Text.ToLower()
+
+        ' ListBox'ı temizleyin
+        ListBox1.Items.Clear()
+
+        ' Eşleşen öğeleri bulun ve ListBox'a ekleyin
+        For Each item As String In csvDataList
+            If item.ToLower().Contains(searchText) Then
+                ListBox1.Items.Add(item)
+            End If
+        Next
+    End Sub
+
+    Private Sub ListBox1_SelectedIndexChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles ListBox1.SelectedIndexChanged
+        ' ListBox'ta seçili öğeyi kontrol edin
+        If ListBox1.SelectedIndex <> -1 Then
+            ' Seçili öğeyi alın
+            Dim selectedItem As String = ListBox1.SelectedItem.ToString()
+
+            ' İlk " - " karakterinin konumunu bulun
+            Dim index As Integer = selectedItem.IndexOf(" - ")
+
+            ' Eğer " - " karakteri bulunursa, öncesini TextBox4'e, sonrasını TextBox5'e ayırın
+            If index <> -1 Then
+                Dim zzMalzeme As String = selectedItem.Substring(0, index)
+                Dim malzeme As String = selectedItem.Substring(index + 3) ' " - " dahil değil, bu yüzden +3 eklenir.
+
+                ' TextBox4 ve TextBox5'e veriyi yazdırın
+                TextBox4.Text = zzMalzeme
+                TextBox5.Text = malzeme
+            Else
+                MsgBox("Seçili öğe geçerli bir formata sahip değil.")
+            End If
+        Else
+            MsgBox("Listeden bir öğe seçiniz.")
+        End If
+    End Sub
+    
+    
+
+    Private Sub OK_Button_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles OK_Button.Click
+        Me.DialogResult = System.Windows.Forms.DialogResult.OK
+ Try
+                ' Body niteliklerini güncelleme
+                If selectedBody IsNot Nothing Then
+                    ' Sertlik niteliğine TextBox2'deki veriyi kaydet
+                    selectedBody.SetAttribute("sertlik", TextBox2.Text)
+                    ' STOCKSIZE niteliğine TextBox3'deki veriyi kaydet
+                    selectedBody.SetAttribute("STOCKSIZE", TextBox3.Text)
+                    ' ZZMALZEME niteliğine TextBox4'deki veriyi kaydet
+                    selectedBody.SetAttribute("ZZMALZEME", TextBox4.Text)
+                    ' MALZEME niteliğine TextBox5'deki veriyi kaydet
+                    selectedBody.SetAttribute("MALZEME", TextBox5.Text)
+                Else
+                    MsgBox("Seçili bir body yok.")
+                End If
+            Catch ex As Exception
+                MsgBox("Bir hata oluştu: " & ex.Message)
+            End Try
+       
+        If ListBox1.SelectedIndex <> -1 Then
+            ' Seçili öğeyi alın
+            Dim selectedItem As String = ListBox1.SelectedItem.ToString()
+            Dim index As Integer = selectedItem.IndexOf(" - ")
+
+            If index <> -1 Then
+                Dim malzemeKodu As String = selectedItem.Substring(0, index)
+                Dim malzemeAdi As String = selectedItem.Substring(index + 3)
+
+                Try
+                   ' workPart.SetAttribute(myAttributeTitle(5), malzemeKodu)
+                    'workPart.SetAttribute(myAttributeTitle(6), malzemeAdi)
+                Catch ex As Exception
+                    MsgBox(ex.Message)
+                End Try
+            Else
+             '  MsgBox("Seçili öğe geçerli bir formata sahip değil.")
+            End If
+        Else
+           ' MsgBox("Listeden bir öğe seçiniz.")
+        End If
+
+        Me.Close()
+    End Sub
+
+    Private Sub Cancel_Button_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Cancel_Button.Click
+        Me.DialogResult = System.Windows.Forms.DialogResult.Cancel
+        Me.Close()
+    End Sub
+
+    Private Sub Dialog1_Load(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.Load
+        ' CSV dosyasının yüklenmesi
+        Dim filePath As String = "D:\NxMacro\Data\SARF_KODLAR.csv" ' Dosya yolu
+        LoadCSVDataToListBox(filePath, ListBox1)
+    End Sub
+    
+
+
+
+End Class
+
+    
+    
+
+'--------
+
+
+'------Form Oluşturma
+
+<Global.Microsoft.VisualBasic.CompilerServices.DesignerGenerated()> _
+Partial Class Dialog1
+    Inherits System.Windows.Forms.Form
+
+    'Form overrides dispose to clean up the component list.
+    <System.Diagnostics.DebuggerNonUserCode()> _
+    Protected Overrides Sub Dispose(ByVal disposing As Boolean)
+        Try
+            If disposing AndAlso components IsNot Nothing Then
+                components.Dispose()
+            End If
+        Finally
+            MyBase.Dispose(disposing)
+        End Try
+    End Sub
+
+    'Required by the Windows Form Designer
+    Private components As System.ComponentModel.IContainer
+
+    'NOTE: The following procedure is required by the Windows Form Designer
+    'It can be modified using the Windows Form Designer.  
+    'Do not modify it using the code editor.
+    <System.Diagnostics.DebuggerStepThrough()> _
+  Private Sub InitializeComponent()
+        Me.TextBox1 = New System.Windows.Forms.TextBox()
+        Me.TextBox2 = New System.Windows.Forms.TextBox()
+        Me.TextBox3 = New System.Windows.Forms.TextBox()
+        Me.TextBox4 = New System.Windows.Forms.TextBox()
+        Me.TextBox5 = New System.Windows.Forms.TextBox()
+        Me.TxtAra = New System.Windows.Forms.TextBox()
+        Me.Label1 = New System.Windows.Forms.Label()
+        Me.Label2 = New System.Windows.Forms.Label()
+        Me.Label3 = New System.Windows.Forms.Label()
+        Me.Label4 = New System.Windows.Forms.Label()
+        Me.Label5 = New System.Windows.Forms.Label()
+        Me.LabelAra = New System.Windows.Forms.Label()
+        Me.ListBox1 = New System.Windows.Forms.ListBox()
+        Me.OK_Button = New System.Windows.Forms.Button()
+        Me.Cancel_Button = New System.Windows.Forms.Button()
+        Me.Label6 = New System.Windows.Forms.Label()
+        Me.SuspendLayout()
+        '
+        'TextBox1
+        '
+        Me.TextBox1.Location = New System.Drawing.Point(108, 12)
+        Me.TextBox1.Name = "TextBox1"
+        Me.TextBox1.Size = New System.Drawing.Size(260, 23)
+        Me.TextBox1.TabIndex = 1
+        Me.TextBox1.Text = "M.OZCAN"
+        '
+        'TextBox2
+        '
+        Me.TextBox2.Location = New System.Drawing.Point(108, 41)
+        Me.TextBox2.Name = "TextBox2"
+        Me.TextBox2.Size = New System.Drawing.Size(260, 23)
+        Me.TextBox2.TabIndex = 3
+        '
+        'TextBox3
+        '
+        Me.TextBox3.Location = New System.Drawing.Point(108, 70)
+        Me.TextBox3.Name = "TextBox3"
+        Me.TextBox3.Size = New System.Drawing.Size(260, 23)
+        Me.TextBox3.TabIndex = 4
+        '
+        'TextBox4
+        '
+        Me.TextBox4.Location = New System.Drawing.Point(108, 99)
+        Me.TextBox4.Name = "TextBox4"
+        Me.TextBox4.ReadOnly = True
+        Me.TextBox4.Size = New System.Drawing.Size(260, 23)
+        Me.TextBox4.TabIndex = 5
+        '
+        'TextBox5
+        '
+        Me.TextBox5.Location = New System.Drawing.Point(108, 128)
+        Me.TextBox5.Name = "TextBox5"
+        Me.TextBox5.ReadOnly = True
+        Me.TextBox5.Size = New System.Drawing.Size(260, 23)
+        Me.TextBox5.TabIndex = 5
+        '
+        'TxtAra
+        '
+        Me.TxtAra.Location = New System.Drawing.Point(108, 178)
+        Me.TxtAra.Name = "TxtAra"
+        Me.TxtAra.Size = New System.Drawing.Size(260, 23)
+        Me.TxtAra.TabIndex = 0
+        '
+        'Label1
+        '
+        Me.Label1.AutoSize = True
+        Me.Label1.Location = New System.Drawing.Point(30, 20)
+        Me.Label1.Name = "Label1"
+        Me.Label1.Size = New System.Drawing.Size(66, 15)
+        Me.Label1.TabIndex = 6
+        Me.Label1.Text = "TASARIMCI"
+        Me.Label1.TextAlign = System.Drawing.ContentAlignment.MiddleRight
+        '
+        'Label2
+        '
+        Me.Label2.AutoSize = True
+        Me.Label2.Location = New System.Drawing.Point(49, 49)
+        Me.Label2.Name = "Label2"
+        Me.Label2.Size = New System.Drawing.Size(47, 15)
+        Me.Label2.TabIndex = 7
+        Me.Label2.Text = "SERTLİK"
+        Me.Label2.TextAlign = System.Drawing.ContentAlignment.MiddleRight
+        '
+        'Label3
+        '
+        Me.Label3.AutoSize = True
+        Me.Label3.Location = New System.Drawing.Point(5, 78)
+        Me.Label3.Name = "Label3"
+        Me.Label3.Size = New System.Drawing.Size(91, 15)
+        Me.Label3.TabIndex = 8
+        Me.Label3.Text = "MW_STOCKSIZE"
+        Me.Label3.TextAlign = System.Drawing.ContentAlignment.MiddleRight
+        '
+        'Label4
+        '
+        Me.Label4.AutoSize = True
+        Me.Label4.Location = New System.Drawing.Point(20, 107)
+        Me.Label4.Name = "Label4"
+        Me.Label4.Size = New System.Drawing.Size(76, 15)
+        Me.Label4.TabIndex = 9
+        Me.Label4.Text = "ZZMALZEME"
+        Me.Label4.TextAlign = System.Drawing.ContentAlignment.MiddleRight
+        '
+        'Label5
+        '
+        Me.Label5.AutoSize = True
+        Me.Label5.Location = New System.Drawing.Point(34, 136)
+        Me.Label5.Name = "Label5"
+        Me.Label5.Size = New System.Drawing.Size(62, 15)
+        Me.Label5.TabIndex = 10
+        Me.Label5.Text = "MALZEME"
+        Me.Label5.TextAlign = System.Drawing.ContentAlignment.MiddleRight
+        '
+        'LabelAra
+        '
+        Me.LabelAra.AutoSize = True
+        Me.LabelAra.Location = New System.Drawing.Point(71, 186)
+        Me.LabelAra.Name = "LabelAra"
+        Me.LabelAra.Size = New System.Drawing.Size(25, 15)
+        Me.LabelAra.TabIndex = 11
+        Me.LabelAra.Text = "Ara"
+        Me.LabelAra.TextAlign = System.Drawing.ContentAlignment.MiddleRight
+        '
+        'ListBox1
+        '
+        Me.ListBox1.FormattingEnabled = True
+        Me.ListBox1.ItemHeight = 15
+        Me.ListBox1.Location = New System.Drawing.Point(12, 224)
+        Me.ListBox1.Name = "ListBox1"
+        Me.ListBox1.Size = New System.Drawing.Size(356, 184)
+        Me.ListBox1.TabIndex = 12
+        '
+        'OK_Button
+        '
+        Me.OK_Button.Location = New System.Drawing.Point(212, 426)
+        Me.OK_Button.Name = "OK_Button"
+        Me.OK_Button.Size = New System.Drawing.Size(75, 23)
+        Me.OK_Button.TabIndex = 13
+        Me.OK_Button.Text = "Ok"
+        Me.OK_Button.UseVisualStyleBackColor = True
+        '
+        'Cancel_Button
+        '
+        Me.Cancel_Button.Location = New System.Drawing.Point(293, 426)
+        Me.Cancel_Button.Name = "Cancel_Button"
+        Me.Cancel_Button.Size = New System.Drawing.Size(75, 23)
+        Me.Cancel_Button.TabIndex = 14
+        Me.Cancel_Button.Text = "Cancel"
+        Me.Cancel_Button.UseVisualStyleBackColor = True
+        '
+        'Label6
+        '
+        Me.Label6.AutoSize = True
+        Me.Label6.Font = New System.Drawing.Font("Arial", 7.0!, System.Drawing.FontStyle.Italic, System.Drawing.GraphicsUnit.Point)
+        Me.Label6.Location = New System.Drawing.Point(5, 441)
+        Me.Label6.Name = "Label6"
+        Me.Label6.Size = New System.Drawing.Size(74, 13)
+        Me.Label6.TabIndex = 15
+        Me.Label6.Text = "by muratozcan"
+        Me.Label6.TextAlign = System.Drawing.ContentAlignment.MiddleRight
+        '
+        'Dialog1
+        '
+        Me.ClientSize = New System.Drawing.Size(384, 461)
+        Me.Controls.Add(Me.Label6)
+        Me.Controls.Add(Me.Cancel_Button)
+        Me.Controls.Add(Me.OK_Button)
+        Me.Controls.Add(Me.ListBox1)
+        Me.Controls.Add(Me.LabelAra)
+        Me.Controls.Add(Me.Label5)
+        Me.Controls.Add(Me.Label4)
+        Me.Controls.Add(Me.Label3)
+        Me.Controls.Add(Me.Label2)
+        Me.Controls.Add(Me.Label1)
+        Me.Controls.Add(Me.TxtAra)
+        Me.Controls.Add(Me.TextBox5)
+        Me.Controls.Add(Me.TextBox4)
+        Me.Controls.Add(Me.TextBox3)
+        Me.Controls.Add(Me.TextBox2)
+        Me.Controls.Add(Me.TextBox1)
+        Me.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle
+        Me.Name = "Dialog1"
+        Me.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen
+        Me.Tag = "Nitelik Giriş Formu"
+        Me.ResumeLayout(False)
+        Me.PerformLayout()
+
+    End Sub
+
+    Friend WithEvents TableLayoutPanel1 As TableLayoutPanel
+    Friend WithEvents OK_Button As Button
+    Friend WithEvents Cancel_Button As Button
+    Friend WithEvents Label1 As Label
+    Friend WithEvents Label2 As Label
+    Friend WithEvents Label3 As Label
+    Friend WithEvents Label4 As Label
+    Friend WithEvents Label5 As Label
+    Friend WithEvents LabelAra As Label
+    Friend WithEvents ListBox1 As ListBox
+    Friend WithEvents TxtAra As TextBox
+    Friend WithEvents TextBox1 As TextBox
+    Friend WithEvents TextBox2 As TextBox
+    Friend WithEvents TextBox3 As TextBox
+    Friend WithEvents TextBox4 As TextBox
+    Friend WithEvents TextBox5 As TextBox
+    Friend WithEvents byMuratozcan As Label
+    Friend WithEvents Label6 As Label
+End Class
+'------
+End Module
