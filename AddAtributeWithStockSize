@@ -1,3 +1,15 @@
+'NonAlignedMinimumBody_Bounding_body_withSize-v03.vb
+' Written by Murat OZCAN - September 2024, V100
+' Journal desciption: Part Dosyasında seçili bir body için minimum boyutlarda stok parçası oluşturur ve boyutlarını bilgi ekranında yazdırır.
+' Written in VB.Net
+' Tested on Siemens NX 2212 Native
+' V100 - Initial Release - January 2024
+' V103 - Oluşturulan Body silindi - January 2024
+' V104 - Add Body Attributes - January 2024
+' V105 - Add Body Attributes entered by the user   - January 2024
+' V106 - Add Do - Loop and some Function edit   - January 2024
+' V107 - Form Design Edit   - January 2024
+
 Option Strict Off
 Imports System
 Imports System.Collections.Generic
